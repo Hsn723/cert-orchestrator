@@ -1,0 +1,41 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3
+    allow:
+      - dependency-type: "all"
+    groups:
+      k8s:
+        patterns:
+          - "k8s.io/*"
+          - "^sigs.k8s.io/*"
+      ginkgo:
+        patterns:
+          - "^github.com/onsi/*"
+      other:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "^k8s.io/*"
+          - "^sigs.k8s.io/*"
+          - "^github.com/onsi/*"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 3

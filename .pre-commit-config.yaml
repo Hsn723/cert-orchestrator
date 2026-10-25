@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.15.0
+    hooks:
+      - id: golangci-lint
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+        exclude: (charts/cert-estuary/templates/|config/helm)
+      - id: mixed-line-ending
+        args: ["--fix=lf"]

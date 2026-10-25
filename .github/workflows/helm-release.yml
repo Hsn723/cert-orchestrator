@@ -1,0 +1,19 @@
+name: Release Helm chart
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'charts/cert-orchestrator/Chart.yaml'
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    uses: hsn723/actions/.github/workflows/helm-release.yml@3a9e9ad4bbf7fa37f2b1ac810d5d0c9cd06ebc63 # v1.0.48
+    secrets: inherit
+    with:
+      upload_as_oci: true
+      chart_name: cert-orchestrator

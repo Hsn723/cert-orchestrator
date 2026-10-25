@@ -1,0 +1,16 @@
+name: release
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - VERSION
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+  attestations: write
+jobs:
+  release:
+    uses: hsn723/actions/.github/workflows/release.yml@3a9e9ad4bbf7fa37f2b1ac810d5d0c9cd06ebc63 # v1.0.48
+    secrets: inherit
