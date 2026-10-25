@@ -1,0 +1,9 @@
+apiVersion: cert-orchestrator.atelierhsn.com/v1
+kind: CertificateSet
+metadata:
+  labels:
+    app.kubernetes.io/name: cert-orchestrator
+    app.kubernetes.io/managed-by: kustomize
+  name: certificateset-sample
+spec:
+  # TODO(user): Add fields here

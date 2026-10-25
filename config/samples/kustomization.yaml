@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- cert-orchestrator_v1_certificateset.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
