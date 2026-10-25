@@ -35,8 +35,13 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	certorchestratorv1 "github.com/hsn723/cert-orchestrator/api/v1"
+	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+
+	apiv1 "github.com/hsn723/cert-orchestrator/api/v1"
 	"github.com/hsn723/cert-orchestrator/internal/controller"
+	"github.com/hsn723/cert-orchestrator/pkg/health"
+	x509health "github.com/hsn723/cert-orchestrator/pkg/health/x509"
+	"github.com/hsn723/cert-orchestrator/pkg/selection"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -47,8 +52,9 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(cmapi.AddToScheme(scheme))
 
-	utilruntime.Must(certorchestratorv1.AddToScheme(scheme))
+	utilruntime.Must(apiv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -182,17 +188,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := ctrl.SetupSignalHandler()
+
 	if err := (&controller.CertificateSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("certificateset-controller"),
+		Evaluator: health.NewEvaluator(
+			x509health.NewX509Format(
+				x509health.WithRevocationChecker(health.NewNetworkRevocationChecker()),
+				x509health.WithCTChecker(health.NewLogListCTChecker()),
+			),
+		),
+		Algorithms: selection.DefaultRegistry(),
+	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "certificateset")
 		os.Exit(1)
 	}
 	if err := (&controller.SecretReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder("secret-controller"),
+	}).SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "secret")
 		os.Exit(1)
 	}
@@ -208,7 +225,7 @@ func main() {
 	}
 
 	setupLog.Info("Starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
 	}

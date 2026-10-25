@@ -17,34 +17,112 @@ limitations under the License.
 package v1
 
 import (
+	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	// CertificateSetNameAnnotation is set on the Secrets of a CertificateSet to indicate which CertificateSet they belong to.
+	CertificateSetNameAnnotation = "cert-orchestrator.atelierhsn.com/certificate-set"
+	// CertificateSetPriorityAnnotation is set on the Secrets of a CertificateSet to "primary" or "fallback".
+	CertificateSetPriorityAnnotation = "cert-orchestrator.atelierhsn.com/priority"
+	// CertificateSetActiveAnnotation marks the Secret that is copied to the canonical Secret.
+	CertificateSetActiveAnnotation = "cert-orchestrator.atelierhsn.com/active"
+	// CertificateSetSourceSecretAnnotation records on the canonical Secret which Secret it was copied from.
+	CertificateSetSourceSecretAnnotation = "cert-orchestrator.atelierhsn.com/source-secret"
 
-// CertificateSetSpec defines the desired state of CertificateSet
-type CertificateSetSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// CertificateSetNameSeparator separates the CertificateSet name and the issuer name in generated names.
+	CertificateSetNameSeparator = "."
 
-	// foo is an example field of CertificateSet. Edit certificateset_types.go to remove/update
+	// CertificateSetConditionTypeReady is True when the canonical Secret is in sync with the active Secret.
+	CertificateSetConditionTypeReady = "Ready"
+	// CertificateSetConditionTypeSelected is True when a certificate is selected for the canonical Secret.
+	CertificateSetConditionTypeSelected = "Selected"
+	// CertificateSetConditionTypeCertificatesReady is True when cert-manager reports every Certificate as Ready.
+	CertificateSetConditionTypeCertificatesReady = "CertificatesReady"
+)
+
+// SelectionAlgorithm selects the preset used to choose the certificate served through the canonical Secret.
+// +kubebuilder:validation:Enum=ForcePrimary;Strict;PrimaryIfNone;Manual
+type SelectionAlgorithm string
+
+const (
+	// SelectionAlgorithmForcePrimary always selects the primary, regardless of its health.
+	SelectionAlgorithmForcePrimary SelectionAlgorithm = "ForcePrimary"
+	// SelectionAlgorithmStrict only considers certificates that clear all health checks.
+	SelectionAlgorithmStrict SelectionAlgorithm = "Strict"
+	// SelectionAlgorithmPrimaryIfNone behaves like Strict, but selects the primary if no certificate is eligible.
+	SelectionAlgorithmPrimaryIfNone SelectionAlgorithm = "PrimaryIfNone"
+	// SelectionAlgorithmManual never changes the selection. The active Secret is chosen by annotating it.
+	SelectionAlgorithmManual SelectionAlgorithm = "Manual"
+)
+
+// CertificatePriority tells whether a certificate comes from the primary or a fallback issuer.
+type CertificatePriority string
+
+const (
+	CertificatePriorityPrimary  CertificatePriority = "primary"
+	CertificatePriorityFallback CertificatePriority = "fallback"
+)
+
+// CertificateTemplate is the template of the generated Certificates.
+type CertificateTemplate struct {
+	// Spec is a cert-manager Certificate spec. issuerRef is ignored and secretName is overridden for
+	// every generated Certificate.
+	Spec cmapi.CertificateSpec `json:"spec"`
+}
+
+// Issuers lists the issuers to request certificates from.
+type Issuers struct {
+	// Primary is the preferred issuer.
+	// +required
+	Primary cmmeta.IssuerReference `json:"primary"`
+
+	// Fallbacks are the fallback issuers, in priority order.
+	// +kubebuilder:validation:MaxItems=8
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Fallbacks []cmmeta.IssuerReference `json:"fallbacks,omitempty"`
+}
+
+// CertificateSetSpec defines the desired state of CertificateSet.
+// +kubebuilder:validation:XValidation:rule="!has(self.issuers.fallbacks) || self.issuers.fallbacks.all(f, f.name != self.issuers.primary.name)",message="issuer names must be unique within a CertificateSet"
+// +kubebuilder:validation:XValidation:rule="!has(self.issuers.fallbacks) || self.issuers.fallbacks.all(a, self.issuers.fallbacks.exists_one(b, a.name == b.name))",message="issuer names must be unique within a CertificateSet"
+type CertificateSetSpec struct {
+	// Template is the template for the generated Certificates. It is used for all issuers.
+	// +required
+	Template CertificateTemplate `json:"template"`
+
+	// Issuers lists the issuers to request certificates from.
+	// +required
+	Issuers Issuers `json:"issuers"`
+
+	// SelectionAlgorithm selects the preset used to choose the certificate served through the canonical Secret.
+	// +kubebuilder:default=ForcePrimary
+	// +optional
+	SelectionAlgorithm SelectionAlgorithm `json:"selectionAlgorithm,omitempty"`
+
+	// Evaluation interval is the maximum time between evaluations of the CertificateSet. The controller will check the health of the certificates and update the canonical Secret at least this often.
+	// +kubebuilder:default="1m"
+	// +optional
+	EvaluationInterval *metav1.Duration `json:"evaluationInterval,omitempty"`
 }
 
 // CertificateSetStatus defines the observed state of CertificateSet.
 type CertificateSetStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// ActiveCertificate is the name of the Secret whose certificate is currently served through the canonical Secret. It is empty if no certificate is selected.
+	// +optional
+	ActiveCertificate string `json:"activeCertificate,omitempty"`
 
-	// conditions represent the current state of the CertificateSet resource.
+	// LastEvaluationTime is the time of the last evaluation loop.
+	// +optional
+	LastEvaluationTime *metav1.Time `json:"lastEvaluationTime,omitempty"`
+
+	// Conditions represent the current state of the CertificateSet resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
 	// Standard condition types include:
@@ -55,12 +133,18 @@ type CertificateSetStatus struct {
 	// The status of each condition is one of True, False, or Unknown.
 	// +listType=map
 	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Algorithm",type=string,JSONPath=`.spec.selectionAlgorithm`
+// +kubebuilder:printcolumn:name="Active",type=string,JSONPath=`.status.activeCertificate`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // CertificateSet is the Schema for the certificatesets API
 type CertificateSet struct {
@@ -86,6 +170,36 @@ type CertificateSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []CertificateSet `json:"items"`
+}
+
+// CertificateTarget describes one Certificate generated for a CertificateSet.
+type CertificateTarget struct {
+	// Name is the name of both the Certificate and its Secret.
+	Name      string
+	Priority  CertificatePriority
+	IssuerRef cmmeta.IssuerReference
+}
+
+// Targets returns the Certificates generated for the set, primary first, then fallbacks in order.
+func (cs *CertificateSet) Targets() []CertificateTarget {
+	targets := make([]CertificateTarget, 0, len(cs.Spec.Issuers.Fallbacks)+1)
+	targets = append(targets, CertificateTarget{
+		Name:      cs.certificateName(cs.Spec.Issuers.Primary.Name),
+		Priority:  CertificatePriorityPrimary,
+		IssuerRef: cs.Spec.Issuers.Primary,
+	})
+	for _, issuer := range cs.Spec.Issuers.Fallbacks {
+		targets = append(targets, CertificateTarget{
+			Name:      cs.certificateName(issuer.Name),
+			Priority:  CertificatePriorityFallback,
+			IssuerRef: issuer,
+		})
+	}
+	return targets
+}
+
+func (cs *CertificateSet) certificateName(issuerName string) string {
+	return cs.Name + CertificateSetNameSeparator + issuerName
 }
 
 func init() {
