@@ -6,12 +6,6 @@ resources:
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
-  - target:
-      kind: CustomResourceDefinition
-      name: certificatesets.cert-orchestrator.atelierhsn.com
-    patch: |-
-      - op: remove
-        path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/template/properties/spec/required
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 # +kubebuilder:scaffold:crdkustomizewebhookpatch

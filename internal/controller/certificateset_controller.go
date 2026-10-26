@@ -120,7 +120,7 @@ func (r *CertificateSetReconciler) reconcile(ctx context.Context, cs *apiv1.Cert
 	targets := cs.Targets()
 	if err := r.reconcileCertificates(ctx, cs, targets); err != nil {
 		logger.Error(err, "failed to reconcile Certificates")
-		r.Recorder.Eventf(cs, nil, corev1.EventTypeWarning, "CertificateSyncFailed", "Sync", err.Error())
+		r.Recorder.Eventf(cs, nil, corev1.EventTypeWarning, "CertificateSyncFailed", "Sync", "%s", err.Error())
 		setCondition(cs, apiv1.CertificateSetConditionTypeReady, v1.ConditionFalse, "CertificateSyncFailed", err.Error())
 		if statusErr := r.patchStatus(ctx, cs, base); statusErr != nil {
 			return ctrl.Result{}, statusErr
@@ -154,7 +154,7 @@ func (r *CertificateSetReconciler) reconcile(ctx context.Context, cs *apiv1.Cert
 	effective, selected, err := r.applyDecision(ctx, cs, members, decision, active)
 	if err != nil {
 		logger.Error(err, "failed to update active Secret annotations")
-		r.Recorder.Eventf(cs, nil, corev1.EventTypeWarning, "SecretActivationFailed", "Activation", err.Error())
+		r.Recorder.Eventf(cs, nil, corev1.EventTypeWarning, "SecretActivationFailed", "Activation", "%s", err.Error())
 		return ctrl.Result{}, err
 	}
 	ready, err := r.canonicalState(ctx, cs, members, effective)

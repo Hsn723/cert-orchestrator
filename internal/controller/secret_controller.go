@@ -118,7 +118,7 @@ func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			reason = "CanonicalConflict"
 		}
 		logger.Error(err, "failed to sync canonical Secret", "name", cs.Name)
-		r.Recorder.Eventf(secret, cs, corev1.EventTypeWarning, reason, "SecretSync", err.Error())
+		r.Recorder.Eventf(secret, cs, corev1.EventTypeWarning, reason, "SecretSync", "%s", err.Error())
 		return ctrl.Result{}, err
 	}
 	if result != controllerutil.OperationResultNone {
@@ -177,7 +177,7 @@ func (r *SecretReconciler) syncCanonical(ctx context.Context, cs *apiv1.Certific
 		if target.Annotations == nil {
 			target.Annotations = map[string]string{}
 		}
-		target.Annotations[apiv1.CertificateSetNameAnnotation] = cs.Name
+		target.Annotations[apiv1.CertificateSetSourceSecretAnnotation] = src.Name
 		target.Data = maps.Clone(src.Data)
 		return nil
 	})

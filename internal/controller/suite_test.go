@@ -34,7 +34,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	certorchestratorv1 "github.com/hsn723/cert-orchestrator/api/v1"
+	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	apiv1 "github.com/hsn723/cert-orchestrator/api/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -61,17 +62,22 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
-	err = certorchestratorv1.AddToScheme(scheme.Scheme)
+	err = apiv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = corev1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	Expect(cmapi.AddToScheme(scheme.Scheme)).To(Succeed())
+
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "test", "crds"),
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 

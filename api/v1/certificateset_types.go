@@ -81,6 +81,8 @@ type Issuers struct {
 	Primary cmmeta.IssuerReference `json:"primary"`
 
 	// Fallbacks are the fallback issuers, in priority order.
+	// +listType=map
+	// +listMapKey=name
 	// +kubebuilder:validation:MaxItems=8
 	// +optional
 	Fallbacks []cmmeta.IssuerReference `json:"fallbacks,omitempty"`
@@ -88,7 +90,6 @@ type Issuers struct {
 
 // CertificateSetSpec defines the desired state of CertificateSet.
 // +kubebuilder:validation:XValidation:rule="!has(self.issuers.fallbacks) || self.issuers.fallbacks.all(f, f.name != self.issuers.primary.name)",message="issuer names must be unique within a CertificateSet"
-// +kubebuilder:validation:XValidation:rule="!has(self.issuers.fallbacks) || self.issuers.fallbacks.all(a, self.issuers.fallbacks.exists_one(b, a.name == b.name))",message="issuer names must be unique within a CertificateSet"
 type CertificateSetSpec struct {
 	// Template is the template for the generated Certificates. It is used for all issuers.
 	// +required
