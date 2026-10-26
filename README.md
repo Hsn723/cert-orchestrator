@@ -1,121 +1,101 @@
 # cert-orchestrator
-// TODO(user): Add simple overview of use/purpose
+
+Automatic TLS certificate failover for Kubernetes.
+
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
 
-## Getting Started
+`cert-orchestrator` is a Kubernetes controller inspired by [Cloudflare's backup certificate architecture](https://blog.cloudflare.com/introducing-backup-certificates/). It aims to improve TLS resilience by maintaining certificates issued by independent Certificate Authorities (CAs) and automatically selecting an acceptable certificate when the primary is no longer suitable.
 
-### Prerequisites
-- go version v1.24.6+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+## Motivation
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+Automated certificate renewal does not eliminate CA-related risks. A CA may suffer a security incident, mis-issue certificates, have its trust revoked, or become unable to issue replacements when they are urgently needed. Recent examples include [eMudhra's compromised intermediate CA private keys](https://bugzilla.mozilla.org/show_bug.cgi?id=2083449), [GoDaddy's mass revocation of mis-issued certificates](https://bugzilla.mozilla.org/show_bug.cgi?id=2082703), and [GoDaddy issuing certificates using a previously compromised private key](https://bugzilla.mozilla.org/show_bug.cgi?id=2079943).
 
-```sh
-make docker-build docker-push IMG=<some-registry>/cert-orchestrator:tag
-```
+Even with automated renewal, an affected certificate may need to be replaced long before its expiration date.
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+Maintaining a certificate from an independent CA provides an alternative that is already available when the primary certificate can no longer be trusted. This reduces dependence on emergency re-issuance and deployment during an incident.
 
-**Install the CRDs into the cluster:**
+Cloudflare employs a similar principle with backup certificates. However, Cloudflare controls its TLS termination infrastructure and can manage certificate selection centrally. Kubernetes environments are more heterogeneous: ingress controllers, proxies, and individual workloads consume certificates through different mechanisms, and some require restarts or explicit reloads to apply changes.
 
-```sh
-make install
-```
+`cert-orchestrator` adapts this principle to Kubernetes by exposing the selected certificate through a conventional TLS Secret. Workloads can continue consuming certificates as they would consume a `cert-manager`-managed Secret, without implementing their own CA failover logic.
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+### Why not just use ARI?
 
-```sh
-make deploy IMG=<some-registry>/cert-orchestrator:tag
-```
+[ACME Renewal Information (ARI), RFC 9773](https://www.rfc-editor.org/rfc/rfc9773.html), improves certificate lifecycle management by allowing CAs to recommend renewal timing, including in response to incidents that require early replacement.
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+However, ARI coordinates renewal; it does not ensure that a certificate from an independent CA is already available. Emergency replacement still depends on obtaining a new certificate and propagating it to every consumer. ARI can help facilitate this process, but it does not eliminate those dependencies. It can also not be relied upon when there is an incident requiring the entire CA to be distrusted.
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+`cert-orchestrator` addresses a complementary problem: keeping independently issued certificates available in advance and selecting an acceptable alternative when necessary. ARI remains useful for renewing both certificates appropriately; `cert-orchestrator` provides the selection and distribution layer.
 
-```sh
-kubectl apply -k config/samples/
-```
+## How it works
 
->**NOTE**: Ensure that the samples has default values to test it out.
+Multiple certificates are issued and renewed independently, typically using `cert-manager`, with each certificate stored in its own Secret.
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+`cert-orchestrator` watches these Secrets, validates the available certificates, and selects one according to a configurable policy. It then reconciles a destination TLS Secret containing the selected certificate chain and its corresponding private key.
 
-```sh
-kubectl delete -k config/samples/
-```
+Consumers continue referencing this destination Secret as a standard Kubernetes TLS Secret. This supports integrations such as Contour/Envoy and other workloads that consume Kubernetes TLS Secrets, without requiring them to understand individual CAs or implement certificate selection themselves.
 
-**Delete the APIs(CRDs) from the cluster:**
+The destination Secret contains one selected certificate at a time; it is not a concatenation of alternative certificates. Consumers must still observe Secret updates and reload their TLS configuration as required.
 
-```sh
-make uninstall
-```
+## Goals
 
-**UnDeploy the controller from the cluster:**
+- CA redundancy: Reduce dependence on any single CA by maintaining independently issued certificates
+
+- Automatic failover: Select an acceptable alternative when the preferred certificate becomes unsuitable
+
+- Transparent consumption: Preserve compatibility with conventional Kubernetes TLS Secret consumers
+
+- Separation of concerns: Leave issuance and renewal to `cert-manager` while centralizing certificate selection
+
+- Safe selection: Provide several selection algorithms to suit different use cases and risk tolerances
+
+`cert-orchestrator` does not replace cert-manager or ARI, guarantee instantaneous propagation to every workload, or eliminate the need for appropriate incident-response policies. Its purpose is to make cross-CA certificate redundancy practical in heterogeneous Kubernetes environments.
+
+## Installation
+
+It is recommended to have `cert-manager` installed first, optionally in a different namespaces for better security. 
+
+The easiest way to install `cert-manager` is via Helm:
 
 ```sh
-make undeploy
+helm install \
+  cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --create-namespace \
+  --set crds.enabled=true
 ```
 
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
+`cert-orchestrator` can be installed via Helm:
 
 ```sh
-make build-installer IMG=<some-registry>/cert-orchestrator:tag
+helm install --create-namespace --namespace cert-orchestrator cert-orchestrator oci://ghcr.io/hsn723/charts/cert-orchestrator --version ${VERSION}
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+## Usage
 
-2. Using the installer
+Create a `CertificateSet` resource defining a set of `Certificates` and their primary/fallback `Issuers`.
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/cert-orchestrator/<tag or branch>/dist/install.yaml
+```yaml
+apiVersion: cert-orchestrator.atelierhsn.com/v1
+kind: CertificateSet
+metadata:
+  name: certificateset-sample
+spec:
+  template:
+    spec:
+      dnsNames: ["example.com"]
+  issuers:
+    primary:
+      kind: Issuer
+      name: lets-encrypt
+    fallbacks:
+      - kind: Issuer
+        name: zerossl
+  selectionAlgorithm: Strict
+  evaluationInterval: 1m
 ```
 
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+This will template two `Certificate` resources for `cert-manager` to reconcile, after which their respective `Secrets` will be evaluated to select the presentation certificate.
 
 ## License
 
@@ -132,4 +112,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-
