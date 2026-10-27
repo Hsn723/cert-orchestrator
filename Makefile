@@ -16,6 +16,10 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+TARGETOS ?= linux
+TARGETARCH ?= $(shell go env GOARCH)
+TARGETPLATFORM ?= $(TARGETOS)/$(TARGETARCH)
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -61,6 +65,11 @@ manifests: init-aqua ## Generate WebhookConfiguration, ClusterRole and CustomRes
 	# Certificate, so they are optional in the template.
 	yq -i 'del(.spec.versions[].schema.openAPIV3Schema.properties.spec.properties.template.properties.spec.required)' \
 		config/crd/bases/cert-orchestrator.atelierhsn.com_certificatesets.yaml
+	{ echo '{{- if .Values.crds.install }}'; \
+	  kustomize build config/helm/crds | sed 's/{{/{{ "{{" }}/g'; \
+	  echo '{{- end }}'; } > charts/cert-orchestrator/templates/generated/crds/cert-orchestrator.atelierhsn.com_certificatesets.yaml
+	kustomize build --load-restrictor LoadRestrictionsNone config/helm/rbac \
+		> charts/cert-orchestrator/templates/generated/rbac.yaml
 
 .PHONY: generate
 generate: init-aqua ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -78,12 +87,6 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest test/crds/cert-manager.crds.yaml ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
-# TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
-# kubectl kuberc is disabled by default for test isolation; enable with:
-# - KUBECTL_KUBERC=true
-# CertManager is installed by default; skip with:
-# - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= $(PROJECT_NAME)
 
 .PHONY: setup-test-e2e
@@ -121,7 +124,8 @@ lint-config: init-aqua ## Verify golangci-lint linter configuration
 
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
-	mkdir -p linux/amd64; CGO_ENABLED=0 go build -o linux/amd64/$(PROJECT_NAME) cmd/main.go
+	mkdir -p $(TARGETPLATFORM)
+	CGO_ENABLED=0 go build -o $(TARGETPLATFORM)/$(PROJECT_NAME) cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -134,7 +138,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 # make docker-build IMG=<img> BASE_IMAGE=docker.io/library/golang:1.26
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) -t ${IMG} .
+	$(CONTAINER_TOOL) build --platform=$(TARGETPLATFORM) $(if $(BASE_IMAGE),--build-arg BASE_IMAGE=$(BASE_IMAGE)) -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.

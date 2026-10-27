@@ -87,7 +87,7 @@ spec:
   issuers:
     primary:
       kind: Issuer
-      name: lets-encrypt
+      name: letsencrypt
     fallbacks:
       - kind: Issuer
         name: zerossl

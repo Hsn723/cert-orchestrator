@@ -6,4 +6,23 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: certificateset-sample
 spec:
-  # TODO(user): Add fields here
+  template:
+    spec:
+      dnsNames:
+        - example.com
+        - www.example.com
+      usages:
+        - server auth
+      privateKey:
+        algorithm: ECDSA
+        size: 256
+      revisionHistoryLimit: 2
+  issuers:
+    primary:
+      name: letsencrypt
+      kind: Issuer
+    fallbacks:
+      - name: zerossl
+        kind: Issuer
+  selectionAlgorithm: "ForcePrimary"
+  evaluationInterval: 30s

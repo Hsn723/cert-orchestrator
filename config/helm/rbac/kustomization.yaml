@@ -1,0 +1,30 @@
+resources:
+- ../../rbac/role.yaml
+- ../../rbac/leader_election_role.yaml
+- ../../rbac/certificateset_admin_role.yaml
+- ../../rbac/certificateset_editor_role.yaml
+- ../../rbac/certificateset_viewer_role.yaml
+
+patches:
+- target:
+    kind: ClusterRole
+  patch: |-
+    - op: add
+      path: /metadata/namespace
+      value: "{{ .Release.Namespace }}"
+    - op: add
+      path: /metadata/labels
+      value:
+        app.kubernetes.io/name: cert-orchestrator
+        app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+- target:
+    kind: Role
+  patch: |-
+    - op: add
+      path: /metadata/namespace
+      value: "{{ .Release.Namespace }}"
+    - op: add
+      path: /metadata/labels
+      value:
+        app.kubernetes.io/name: cert-orchestrator
+        app.kubernetes.io/managed-by: "{{ .Release.Service }}"

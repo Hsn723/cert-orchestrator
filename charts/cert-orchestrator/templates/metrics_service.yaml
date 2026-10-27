@@ -1,0 +1,15 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cert-orchestrator.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - name: https
+      port: {{ .Values.metrics.port }}
+      protocol: TCP
+      targetPort: {{ .Values.metrics.port }}
+  selector:
+    {{- include "cert-orchestrator.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,180 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: cert-orchestrator
+  name: leader-election-role
+  namespace: '{{ .Release.Namespace }}'
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: cert-orchestrator
+  name: certificateset-admin-role
+  namespace: '{{ .Release.Namespace }}'
+rules:
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets
+  verbs:
+  - '*'
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: cert-orchestrator
+  name: certificateset-editor-role
+  namespace: '{{ .Release.Namespace }}'
+rules:
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: cert-orchestrator
+  name: certificateset-viewer-role
+  namespace: '{{ .Release.Namespace }}'
+rules:
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: '{{ .Release.Service }}'
+    app.kubernetes.io/name: cert-orchestrator
+  name: manager-role
+  namespace: '{{ .Release.Namespace }}'
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cert-orchestrator.atelierhsn.com
+  resources:
+  - certificatesets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch

@@ -18,3 +18,4 @@ packages:
 - name: kubernetes/kubernetes/kubectl@v1.37.1
 - name: kubernetes-sigs/kustomize@kustomize/v5.8.3
 - name: mikefarah/yq@v4.54.1
+- name: helm/helm@v4.3.1

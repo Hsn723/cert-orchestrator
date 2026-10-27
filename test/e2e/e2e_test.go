@@ -25,11 +25,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+	"uuid"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 
+	apiv1 "github.com/hsn723/cert-orchestrator/api/v1"
 	"github.com/hsn723/cert-orchestrator/test/utils"
 )
 
@@ -269,16 +274,127 @@ var _ = Describe("Manager", Ordered, func() {
 		})
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
+	})
 
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput, err := getMetricsOutput()
-		// Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+	Context("CertificateSet", func() {
+		const (
+			setName        = "web"
+			primaryIssuer  = "primary-issuer"
+			fallbackIssuer = "other-issuer"
+		)
+		var testNamespace, primary, fallback string
+
+		BeforeEach(func() {
+			testNamespace = "e2e-" + uuid.New().String()[:8]
+			primary = setName + apiv1.CertificateSetNameSeparator + primaryIssuer
+			fallback = setName + apiv1.CertificateSetNameSeparator + fallbackIssuer
+
+			By("creating a test namespace")
+			_, err := kubectl("create", "ns", testNamespace)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create test namespace")
+			DeferCleanup(func() { _, _ = kubectl("delete", "ns", testNamespace) })
+		})
+
+		AfterEach(func() {
+			if !CurrentSpecReport().Failed() {
+				return
+			}
+			for _, args := range [][]string{
+				{"describe", "certificatesets.cert-orchestrator.atelierhsn.com,certificates", "-n", testNamespace},
+				{"get", "secrets,events", "-n", testNamespace},
+			} {
+				out, _ := kubectl(args...)
+				_, _ = fmt.Fprintf(GinkgoWriter, "--- kubectl %s\n%s\n", strings.Join(args, " "), out)
+			}
+		})
+
+		createSet := func(alg apiv1.SelectionAlgorithm) {
+			By("creating the Issuers and CertificateSet")
+			Eventually(func() error {
+				return kubectlApply(certificateSetManifest(testNamespace, setName, primaryIssuer, fallbackIssuer, alg))
+			}).Should(Succeed())
+		}
+
+		expectCanonical := func(source string) {
+			GinkgoHelper()
+			Eventually(func(g Gomega) {
+				canonical := getSecret(g, testNamespace, setName)
+				g.Expect(canonical.Type).To(Equal(corev1.SecretTypeTLS))
+				g.Expect(canonical.Data[corev1.TLSCertKey]).To(Equal(getSecret(g, testNamespace, source).Data[corev1.TLSCertKey]))
+				g.Expect(canonical.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetSourceSecretAnnotation, source))
+				cs := getCertificateSet(g, testNamespace, setName)
+				g.Expect(cs.Status.ActiveCertificate).To(Equal(source))
+				g.Expect(meta.IsStatusConditionTrue(cs.Status.Conditions, apiv1.CertificateSetConditionReady)).To(BeTrue())
+			}).Should(Succeed())
+		}
+
+		It("should serve the certificate of the primary with ForcePrimary", func() {
+			createSet(apiv1.SelectionAlgorithmForcePrimary)
+
+			By("checking that the generated Secrets inherited their annotations from the Certificates")
+			Eventually(func(g Gomega) {
+				p := getSecret(g, testNamespace, primary)
+				g.Expect(p.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetNameAnnotation, setName))
+				g.Expect(p.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetPriorityAnnotation, "primary"))
+				f := getSecret(g, testNamespace, fallback)
+				g.Expect(f.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetNameAnnotation, setName))
+				g.Expect(f.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetPriorityAnnotation, "fallback"))
+			}).Should(Succeed())
+
+			By("checking that the primary is active and copied to the canonical Secret")
+			expectCanonical(primary)
+			Eventually(func(g Gomega) {
+				g.Expect(getSecret(g, testNamespace, primary).Annotations).To(HaveKeyWithValue(apiv1.CertificateSetActiveAnnotation, "true"))
+				g.Expect(getSecret(g, testNamespace, fallback).Annotations).NotTo(HaveKey(apiv1.CertificateSetActiveAnnotation))
+				g.Expect(getSecret(g, testNamespace, setName).Data[corev1.TLSCertKey]).
+					NotTo(Equal(getSecret(g, testNamespace, fallback).Data[corev1.TLSCertKey]))
+			}).Should(Succeed())
+		})
+
+		It("should leave the selection to the user with Manual", func() {
+			createSet(apiv1.SelectionAlgorithmManual)
+
+			By("checking that nothing is selected and no canonical Secret exists")
+			Eventually(func(g Gomega) {
+				set := getCertificateSet(g, testNamespace, setName)
+				cond := meta.FindStatusCondition(set.Status.Conditions, apiv1.CertificateSetConditionTypeSelected)
+				g.Expect(cond).NotTo(BeNil())
+				g.Expect(cond.Reason).To(Equal("NoActiveSecret"))
+			}).Should(Succeed())
+			Consistently(func() error {
+				_, err := kubectl("get", "secret/"+setName, "-n", testNamespace)
+				return err
+			}).WithTimeout(10 * time.Second).ShouldNot(Succeed())
+
+			By("activating the fallback")
+			_, err := kubectl("annotate", "secret/"+fallback, "-n", testNamespace, apiv1.CertificateSetActiveAnnotation+"=true")
+			Expect(err).NotTo(HaveOccurred())
+			expectCanonical(fallback)
+
+			By("switching to the primary")
+			_, err = kubectl("annotate", "secret/"+fallback, "-n", testNamespace, apiv1.CertificateSetActiveAnnotation+"-")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = kubectl("annotate", "secret/"+primary, "-n", testNamespace, apiv1.CertificateSetActiveAnnotation+"=true")
+			Expect(err).NotTo(HaveOccurred())
+			expectCanonical(primary)
+		})
+
+		It("should remove its Certificates and the canonical Secret with the CertificateSet", func() {
+			createSet(apiv1.SelectionAlgorithmForcePrimary)
+			expectCanonical(primary)
+
+			By("deleting the CertificateSet")
+			_, err := kubectl("delete", "certificatesets.cert-orchestrator.atelierhsn.com/"+setName, "-n", testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				out, err := kubectl("get", "certificates", "-n", testNamespace, "-o", "name")
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(BeEmpty())
+				_, err = kubectl("get", "secret/"+setName, "-n", testNamespace)
+				g.Expect(err).To(HaveOccurred())
+			}).Should(Succeed())
+		})
 	})
 })
 
@@ -336,4 +452,80 @@ type tokenRequest struct {
 	Status struct {
 		Token string `json:"token"`
 	} `json:"status"`
+}
+
+func kubectl(args ...string) (string, error) {
+	out, err := utils.Run(exec.Command("kubectl", args...))
+	return strings.TrimSpace(out), err
+}
+
+func kubectlApply(manifest string) error {
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	_, err := utils.Run(cmd)
+	return err
+}
+
+func getJSON(g Gomega, ns, resource string, obj any) {
+	GinkgoHelper()
+	out, err := exec.Command("kubectl", "get", resource, "-n", ns, "-o", "json").Output()
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(json.Unmarshal(out, obj)).To(Succeed())
+}
+
+func getSecret(g Gomega, ns, name string) *corev1.Secret {
+	GinkgoHelper()
+	s := &corev1.Secret{}
+	getJSON(g, ns, "secret/"+name, s)
+	return s
+}
+
+func getCertificateSet(g Gomega, ns, name string) *apiv1.CertificateSet {
+	GinkgoHelper()
+	cs := &apiv1.CertificateSet{}
+	getJSON(g, ns, "certificatesets.cert-orchestrator.atelierhsn.com/"+name, cs)
+	return cs
+}
+
+func certificateSetManifest(ns, name, primaryIssuer, fallbackIssuer string, algorithm apiv1.SelectionAlgorithm) string {
+	return fmt.Sprintf(`apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: %[3]s
+  namespace: %[1]s
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: %[4]s
+  namespace: %[1]s
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-orchestrator.atelierhsn.com/v1
+kind: CertificateSet
+metadata:
+  name: %[2]s
+  namespace: %[1]s
+spec:
+  selectionAlgorithm: %[5]s
+  template:
+    spec:
+      dnsNames:
+        - example.com
+      privateKey:
+        algorithm: ECDSA
+        size: 256
+  issuers:
+    primary:
+      name: %[3]s
+      kind: Issuer
+      group: cert-manager.io
+    fallbacks:
+      - name: %[4]s
+        kind: Issuer
+        group: cert-manager.io
+`, ns, name, primaryIssuer, fallbackIssuer, algorithm)
 }

@@ -1,0 +1,11 @@
+resources:
+- ../../crd
+
+patches:
+# keep the CRDs, and with them every CertificateSet, when the release is uninstalled
+- target:
+    kind: CustomResourceDefinition
+  patch: |-
+    - op: add
+      path: /metadata/annotations/helm.sh~1resource-policy
+      value: keep

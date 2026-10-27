@@ -1,0 +1,36 @@
+image:
+  # image.repository -- image repository to use.
+  repository: ghcr.io/hsn723/cert-orchestrator
+  # image.tag -- image tag to use.
+  # @default -- `{{ .Chart.AppVersion }}`
+  # tag: v0.1.0
+  # image.pullPolicy -- image pullPolicy.
+  pullPolicy:  # Always
+
+crds:
+  # crds.install -- Install the CRDs with the chart. They are kept when the release is uninstalled.
+  install: true
+
+controller:
+  # controller.replicas -- Specify the number of replicas of the controller Pod.
+  replicas: 2
+
+  # controller.resources -- Specify resources.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 100Mi
+
+  # controller.terminationGracePeriodSeconds -- Specify terminationGracePeriodSeconds.
+  terminationGracePeriodSeconds: 10
+
+  # controller.extraArgs -- Optional additional arguments.
+  extraArgs: ["--leader-elect"]
+
+metrics:
+  enabled: false
+  port: 8443
+  certificate:
+    enabled: false
+  # issuerName -- Specify the name of the issuer.
+  # issuerName: selfsigned-issuer

@@ -22,18 +22,41 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
 )
 
 const (
-	certmanagerVersion = "v1.21.1"
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
 
 	defaultKindBinary  = "kind"
 	defaultKindCluster = "kind"
 )
+
+var (
+	certmanagerVersion string
+)
+
+func init() {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		panic("failed to read Go build info")
+	}
+
+	for _, dep := range info.Deps {
+		if dep.Path == "github.com/cert-manager/cert-manager" {
+			certmanagerVersion = dep.Version
+			if dep.Replace != nil {
+				certmanagerVersion = dep.Replace.Version
+			}
+			return
+		}
+	}
+
+	panic("github.com/cert-manager/cert-manager not found in build info")
+}
 
 func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
