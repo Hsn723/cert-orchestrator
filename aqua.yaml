@@ -19,3 +19,4 @@ packages:
 - name: kubernetes-sigs/kustomize@kustomize/v5.8.3
 - name: mikefarah/yq@v4.54.1
 - name: helm/helm@v4.3.1
+- name: docker/cli@v29.9.2

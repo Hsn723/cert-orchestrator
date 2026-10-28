@@ -19,6 +19,7 @@ endif
 TARGETOS ?= linux
 TARGETARCH ?= $(shell go env GOARCH)
 TARGETPLATFORM ?= $(TARGETOS)/$(TARGETARCH)
+KIND_NODE_TAG = ""
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
@@ -96,7 +97,7 @@ setup-test-e2e: init-aqua ## Set up a Kind cluster for e2e tests if it does not 
 			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
 		*) \
 			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			kind create cluster --name $(KIND_CLUSTER) ;; \
+			kind create cluster --name $(KIND_CLUSTER) --image=kindest/node:v$(KIND_NODE_TAG) ;; \
 	esac
 
 .PHONY: test-e2e
@@ -247,7 +248,7 @@ endef
 
 .PHONY: get-k8s-versions
 get-k8s-versions:
-	@KIND_TAGS=$$(gh api /repos/kubernetes-sigs/kind/releases/latest | jq -r '.body' | grep -Po '(?<=- v)(?:\d+\.\d+\.\d+: `kindest\/node:v)\K(\d+\.\d+\.\d+@sha256:[a-f0-9]+)' | sort -r | head -3) && \
+	@KIND_TAGS=$$(gh api /repos/kubernetes-sigs/kind/releases/latest | jq -r '.body' | grep -Po '(?<= v)(?:\d+\.\d+\.\d+: `kindest\/node:v)\K(\d+\.\d+\.\d+@sha256:[a-f0-9]+)' | sort -r | head -3) && \
 	printf "[%s]" "$$(printf "'%s', " $${KIND_TAGS} | sed 's/, $$//')"
 
 .PHONY: init-aqua

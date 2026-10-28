@@ -9,6 +9,5 @@
 !**/*.go
 **/*_test.go
 
-# Re-include Go module files
-!go.mod
-!go.sum
+!linux/*/cert-orchestrator
+!LICENSE

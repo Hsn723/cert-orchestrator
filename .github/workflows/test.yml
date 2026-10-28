@@ -35,7 +35,6 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - id: get-k8s-version
-      working-directory: e2e
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
@@ -52,10 +51,7 @@ jobs:
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version: ${{ env.go-version }}
-    - run: make start KIND_NODE_TAG=${{ matrix.k8s-version }}
-      working-directory: e2e
-    - run: make test
-      working-directory: e2e
+    - run: make test-e2e KIND_NODE_TAG=${{ matrix.k8s-version }}
   all-e2e-pass:
     name: All e2e test pass
     if: always()

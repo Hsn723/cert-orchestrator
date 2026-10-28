@@ -71,6 +71,16 @@
       "algorithm": "sha256"
     },
     {
+      "id": "http/download.docker.com/linux/static/stable/aarch64/docker-29.9.2.tgz",
+      "checksum": "873B3E0207857C3B2F28392FB922F3EA6EFE37620C16D4D4AAF2FEF409C90B73",
+      "algorithm": "sha256"
+    },
+    {
+      "id": "http/download.docker.com/linux/static/stable/x86_64/docker-29.9.2.tgz",
+      "checksum": "9AC225999FD5E863F7694C728EF23D480616B1E5639328FA309BEFD4243D69EB",
+      "algorithm": "sha256"
+    },
+    {
       "id": "http/get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz",
       "checksum": "0403A88AE20913D11B10A2467B50087721FEA7581736DA6B9D3992F5357FE54B",
       "algorithm": "sha256"

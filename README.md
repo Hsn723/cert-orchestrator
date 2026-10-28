@@ -29,6 +29,8 @@ However, ARI coordinates renewal; it does not ensure that a certificate from an 
 
 ## How it works
 
+![](cert-orchestrator.svg)
+
 Multiple certificates are issued and renewed independently, typically using `cert-manager`, with each certificate stored in its own Secret.
 
 `cert-orchestrator` watches these Secrets, validates the available certificates, and selects one according to a configurable policy. It then reconciles a destination TLS Secret containing the selected certificate chain and its corresponding private key.

@@ -324,7 +324,7 @@ var _ = Describe("Manager", Ordered, func() {
 				g.Expect(canonical.Annotations).To(HaveKeyWithValue(apiv1.CertificateSetSourceSecretAnnotation, source))
 				cs := getCertificateSet(g, testNamespace, setName)
 				g.Expect(cs.Status.ActiveCertificate).To(Equal(source))
-				g.Expect(meta.IsStatusConditionTrue(cs.Status.Conditions, apiv1.CertificateSetConditionReady)).To(BeTrue())
+				g.Expect(meta.IsStatusConditionTrue(cs.Status.Conditions, apiv1.CertificateSetConditionTypeReady)).To(BeTrue())
 			}).Should(Succeed())
 		}
 
