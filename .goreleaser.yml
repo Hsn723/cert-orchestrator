@@ -66,6 +66,6 @@ docker_signs:
     args:
       - 'sign'
       - '--yes'
-      - '${artifact}@{digest}'
+      - '${artifact}@${digest}'
 docker_digest:
   name_template: 'digests.txt'
