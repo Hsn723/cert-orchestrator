@@ -34,7 +34,7 @@ updates:
     groups:
       internal:
         patterns:
-          - "^hsn723/actions/*"
+          - "hsn723/actions/*"
     cooldown:
       default-days: 3
   - package-ecosystem: "pre-commit"
