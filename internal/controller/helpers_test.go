@@ -12,10 +12,10 @@ import (
 	"math/big"
 	"sync"
 	"time"
+	"uuid"
 
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -68,7 +68,7 @@ func (f *fakeRecorder) has(eventType, reason string) bool {
 func createTestNamespace(ctx context.Context) string {
 	GinkgoHelper()
 	By("creating namespace")
-	namespace := uuid.NewString()
+	namespace := uuid.New().String()
 	Expect(k8sClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: namespace},
 	})).To(Succeed())
