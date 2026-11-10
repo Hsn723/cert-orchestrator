@@ -2,8 +2,8 @@ package controller
 
 import (
 	"context"
+	"uuid"
 
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +20,7 @@ func rawCertificateSet(namespace string, fallbacks ...string) *unstructured.Unst
 	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": apiv1.SchemeGroupVersion.String(),
 		"kind":       apiv1.CertificateSetKind,
-		"metadata":   map[string]any{"name": uuid.NewString(), "namespace": namespace},
+		"metadata":   map[string]any{"name": uuid.New().String(), "namespace": namespace},
 		"spec": map[string]any{
 			// no secretName and no issuerRef: they are optional in the template
 			"template": map[string]any{"spec": map[string]any{"dnsNames": []any{"example.com"}}},

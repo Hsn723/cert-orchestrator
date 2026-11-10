@@ -20,10 +20,10 @@ import (
 	"context"
 	"sync"
 	"time"
+	"uuid"
 
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -191,7 +191,7 @@ var _ = Describe("CertificateSet controller", func() {
 	// newSet creates a CertificateSet with one fallback in a new namespace, evaluated every second.
 	newSet := func(algorithm apiv1.SelectionAlgorithm) (cs *apiv1.CertificateSet, primary, fallback string) {
 		namespace := createTestNamespace(ctx)
-		cs = buildCertificateSet(uuid.NewString(), namespace, algorithm, "fallback")
+		cs = buildCertificateSet(uuid.New().String(), namespace, algorithm, "fallback")
 		cs.Spec.EvaluationInterval = &metav1.Duration{Duration: time.Second}
 		Expect(k8sClient.Create(ctx, cs)).To(Succeed())
 		targets := cs.Targets()
@@ -200,7 +200,7 @@ var _ = Describe("CertificateSet controller", func() {
 
 	It("should generate a Certificate per issuer from the template", func() {
 		namespace := createTestNamespace(ctx)
-		cs := buildCertificateSet(uuid.NewString(), namespace, apiv1.SelectionAlgorithmManual, "fallback")
+		cs := buildCertificateSet(uuid.New().String(), namespace, apiv1.SelectionAlgorithmManual, "fallback")
 		cs.Spec.Template.Spec.SecretTemplate = &cmapi.CertificateSecretTemplate{
 			// the active annotation is managed by the controller and must never come from the template
 			Annotations: map[string]string{"custom": "value", apiv1.CertificateSetActiveAnnotation: "true"},

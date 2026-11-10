@@ -19,8 +19,8 @@ package controller
 import (
 	"context"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -99,7 +99,7 @@ var _ = Describe("Secret Controller", func() {
 	// find, so the set must be visible in its cache before any Secret is created.
 	newSet := func() (cs *apiv1.CertificateSet, primary, fallback string) {
 		namespace := createTestNamespace(ctx)
-		cs = createCertificateSet(ctx, uuid.NewString(), namespace, "fallback")
+		cs = createCertificateSet(ctx, uuid.New().String(), namespace, "fallback")
 		Eventually(mgrClient.Get).WithArguments(ctx, client.ObjectKeyFromObject(cs), &apiv1.CertificateSet{}).
 			WithTimeout(eventuallyTimeout).Should(Succeed())
 		targets := cs.Targets()
